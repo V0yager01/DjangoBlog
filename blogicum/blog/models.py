@@ -81,9 +81,9 @@ class Post(models.Model):
                                       verbose_name='Добавлено')
 
     class Meta:
+        ordering = ('-pub_date',)
         verbose_name = 'публикация'
         verbose_name_plural = 'Публикации'
-        ordering = ('-created_at',)
 
     def __str__(self):
         return self.title

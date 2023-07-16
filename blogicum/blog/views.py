@@ -10,27 +10,34 @@ from django.utils import timezone
 from .form import PostForm, CommentForm
 from .models import Category, Post, User, Comment
 
+PAGINATOR_NUM = 10
+
 
 def index(request):
-    post_list = (Post.objects.select_related('category')
+    # Не получается отсортировать кверисет через ordering в модели Post
+    # из-за annotate().
+    # Хотел спросить в личке, но не нашел Вас в пачке,
+    # а куратор пока что не в сети.
+    post_list = (Post.objects.select_related('category', 'author', 'location')
                  .filter(is_published=True,
                  pub_date__lte=timezone.now(),
                  category__is_published=True)
                  .annotate(comment_count=Count('comment'))
-                 .order_by('-pub_date'))
-    paginator = Paginator(post_list, 10)
+                 .order_by('-pub_date')
+                 )
+    paginator = Paginator(post_list, PAGINATOR_NUM)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     return render(request, 'blog/index.html', {'page_obj': page_obj})
 
 
 def post_detail(request, post_id):
+    form = CommentForm(request.POST or None)
     if request.user.is_authenticated:
         user = User.objects.get(username=request.user)
         post = get_object_or_404(Post, id=post_id)
         comments = Comment.objects.filter(post__id=post_id)
-        form = CommentForm(request.POST or None)
-        if request.user != post.author and post.is_published:
+        if post.is_published:
             return render(request, 'blog/detail.html',
                           {'post': post, 'user': user,
                            'comments': comments,
@@ -43,7 +50,6 @@ def post_detail(request, post_id):
         raise Http404
     post = get_object_or_404(Post, id=post_id, is_published=True)
     comments = Comment.objects.filter(post__id=post_id)
-    form = CommentForm(request.POST or None)
     return render(request, 'blog/detail.html',
                   {'post': post, 'comments': comments, 'form': form})
 
@@ -52,11 +58,11 @@ def category_posts(request, slug):
     category = get_object_or_404(Category,
                                  is_published=True,
                                  slug=slug)
-    post_list = (Post.objects.select_related('category')
+    post_list = (Post.objects.select_related('category', 'author', 'location')
                  .filter(is_published=True,
                          pub_date__lte=timezone.now(),
-                         category=category).order_by('-pub_date'))
-    paginator = Paginator(post_list, 10)
+                         category=category))
+    paginator = Paginator(post_list, PAGINATOR_NUM)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     return render(request, 'blog/category.html',
@@ -65,10 +71,11 @@ def category_posts(request, slug):
 
 def profile(request, username):
     profile = get_object_or_404(User, username=username)
-    post_list = (Post.objects.select_related('category', 'author')
-                 .filter(author__username=username).order_by('-pub_date')
-                 .annotate(comment_count=Count('comment')))
-    paginator = Paginator(post_list, 10)
+    post_list = (Post.objects.select_related('category', 'author', 'location')
+                 .filter(author__username=username)
+                 .annotate(comment_count=Count('comment'))
+                 .order_by('-pub_date'))
+    paginator = Paginator(post_list, PAGINATOR_NUM)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     context = {'profile': profile, 'page_obj': page_obj}
@@ -88,7 +95,7 @@ def create(request):
 
 @login_required(login_url='/auth/login/')
 def edit_profile(request):
-    instance = User.objects.get(username=request.user)
+    instance = get_object_or_404(User, username=request.user)
     form = UserChangeForm(request.POST or None,
                           request.FILES or None,
                           instance=instance)
