@@ -14,10 +14,6 @@ PAGINATOR_NUM = 10
 
 
 def index(request):
-    # Не получается отсортировать кверисет через ordering в модели Post
-    # из-за annotate().
-    # Хотел спросить в личке, но не нашел Вас в пачке,
-    # а куратор пока что не в сети.
     post_list = (Post.objects.select_related('category', 'author', 'location')
                  .filter(is_published=True,
                  pub_date__lte=timezone.now(),
